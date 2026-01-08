@@ -43,7 +43,9 @@
 #ifdef ACG_HAVE_HIP
 #include <hip/hip_runtime_api.h>
 #endif
-#ifdef ACG_HAVE_NCCL
+#ifdef ACG_HAVE_MSCCLPP
+#include "mscclpp_c_wrapper.h"
+#elif defined(ACG_HAVE_NCCL)
 #include <nccl.h>
 #endif
 #ifdef ACG_HAVE_RCCL
@@ -168,6 +170,16 @@ const char * acgerrcodestr(
             return "unknown NCCL error";
 #endif
         }
+
+    case ACG_ERR_MSCCLPP:
+        {
+#ifdef ACG_HAVE_MSCCLPP
+            /* MSCCLPP wrapper provides this standard NCCL function */
+            return ncclGetErrorString((ncclResult_t)mpierrcode);
+#else
+            return "unknown MSCCLPP error";
+#endif
+        }
     case ACG_ERR_NVSHMEM:
         {
 #ifdef ACG_HAVE_NVSHMEM
@@ -241,6 +253,7 @@ const char * acgerrcodestr(
         }
     case ACG_ERR_MPI_NOT_SUPPORTED: return "MPI is disabled; please rebuild with MPI support";
     case ACG_ERR_NCCL_NOT_SUPPORTED: return "NCCL is disabled; please rebuild with NCCL support";
+    case ACG_ERR_MSCCLPP_NOT_SUPPORTED: return "MSCCL++ is disabled; please rebuild with MSCCL++ support";
     case ACG_ERR_NVSHMEM_NOT_SUPPORTED: return "NVSHMEM is disabled; please rebuild with NVSHMEM support";
     case ACG_ERR_RCCL_NOT_SUPPORTED: return "RCCL is disabled; please rebuild with RCCL support";
     case ACG_ERR_ROCSHMEM_NOT_SUPPORTED: return "ROCSHMEM is disabled; please rebuild with ROCSHMEM support";

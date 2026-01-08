@@ -56,6 +56,7 @@ enum acgerrcode
     ACG_ERR_MPI,                             /* error code provided by MPI */
     ACG_ERR_CUDA,                            /* error code provided by CUDA */
     ACG_ERR_NCCL,                            /* error code provided by NCCL */
+    ACG_ERR_MSCCLPP,                         /* error code provided by MSCCLPP */
     ACG_ERR_NVSHMEM,                         /* error code provided by NVSHMEM */
     ACG_ERR_CUBLAS,                          /* error code provided by cuBLAS */
     ACG_ERR_CUSPARSE,                        /* error code provided by cuSPARSE */
@@ -66,6 +67,7 @@ enum acgerrcode
     ACG_ERR_HIPSPARSE,                       /* error code provided by hipsparse */
     ACG_ERR_MPI_NOT_SUPPORTED,               /* MPI not supported */
     ACG_ERR_NCCL_NOT_SUPPORTED,              /* NCCL not supported */
+    ACG_ERR_MSCCLPP_NOT_SUPPORTED,           /* MSCCLPP not supported */
     ACG_ERR_NVSHMEM_NOT_SUPPORTED,           /* NVSHMEM not supported */
     ACG_ERR_RCCL_NOT_SUPPORTED,              /* RCCL not supported */
     ACG_ERR_ROCSHMEM_NOT_SUPPORTED,          /* ROCSHMEM not supported */
