@@ -1,0 +1,56 @@
+Before integrating mscclpp:
+
+### Build:
+cd ~/aCG/cuda/build
+rm -rf *
+
+export CUDA_HOME=/usr/local/cuda-12.3
+export CUDACXX=/usr/local/cuda-12.3/bin/nvcc
+export PATH=/usr/local/cuda-12.3/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH
+export MSCCLPP_HCA_DEVICES=mlx5_0,mlx5_0,mlx5_0,mlx5_0
+nvcc --version
+
+cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.3/bin/nvcc \
+      -DCMAKE_CUDA_ARCHITECTURES=80 \
+      ..
+
+make 
+
+### install matrix:
+wget https://suitesparse-collection-website.herokuapp.com/MM/GHS_psdef/audikw_1.tar.gz 
+tar -xzf audikw_1.tar.gz
+
+### Run:
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm nccl ../../matrix/audikw_1/audikw_1.mtx
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm nccl ../../matrix/Queen_4147/Queen_4147.mtx
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm nccl ../../matrix/Bump_2911/Bump_2911.mtx
+
+-------------------------------------------
+# 1. Setup Environment
+export PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2/bin:$PATH
+export LD_LIBRARY_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2
+
+# 2. Configure
+cmake .. \
+  -DCMAKE_INSTALL_PREFIX=$HOME/.local \
+  -DCMAKE_C_COMPILER=gcc \
+  -DCMAKE_CUDA_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2/bin/nvcc \
+  -DCMAKE_CUDA_HOST_COMPILER=gcc \
+  -DCMAKE_CUDA_ARCHITECTURES=80 \
+  -DCUDAToolkit_ROOT=/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2 \
+  -DCMAKE_BUILD_TYPE=Release
+
+# 3. Build
+make
+
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm mscclpp ../../matrix/audikw_1/audikw_1.mtx
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm mscclpp ../../matrix/Queen_4147/Queen_4147.mtx
+mpirun -np 4 acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm mscclpp ../../matrix/Bump_2911/Bump_2911.mtx
+
+
+Force link to msccl++:
+mpirun -np 4 env LD_PRELOAD=/home/hzaqout25/.local/lib/libmscclpp_nccl.so LD_DEBUG=libs ./acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm mscclpp ../../matrix/Bump_2911/Bump_2911.mtx 2>&1 | grep -E "(mscclpp|nccl)"
+normal cmd (use this):
+mpirun -np 4 env LD_PRELOAD=/home/hzaqout25/.local/lib/libmscclpp_nccl.so ./acg-cuda -q --output-comm-matrix --manufactured-solution --seed 101 --residual-atol 0 --residual-rtol 1e-6 --max-iterations 100000 --solver acg --comm mscclpp ../../matrix/Bump_2911/Bump_2911.mtx
