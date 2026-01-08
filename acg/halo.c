@@ -1327,6 +1327,85 @@ static int halo_alltoallv_nccl(
 }
 #endif
 
+
+#if defined(ACG_HAVE_MSCCLPP) && defined(ACG_HAVE_CUDA)
+/**
+ * 'halo_alltoallv_mscclpp()' performs neighbour all-to-all halo exchange using MSCCLPP.
+ *
+ * MSCCLPP provides a drop-in NCCL wrapper with optimized collective operations.
+ * The interface is identical to NCCL but may provide better performance for
+ * specific communication patterns and network configurations.
+ */
+static int halo_alltoallv_mscclpp(
+    const void * sendbuf,
+    int nrecipients,
+    const int * recipients,
+    const int * sendcounts,
+    const int * sdispls,
+    ncclDataType_t sendtype,
+    void * recvbuf,
+    int nsenders,
+    const int * senders,
+    const int * recvcounts,
+    const int * rdispls,
+    ncclDataType_t recvtype,
+    ncclComm_t comm,
+    cudaStream_t stream,
+    int * mscclpperrcode,
+    int64_t * nsendmsgs,
+    int64_t * nsendbytes,
+    int64_t * nrecvmsgs,
+    int64_t * nrecvbytes)
+{
+    int sendtypesize, recvtypesize;
+    if (sendtype == ncclDouble) sendtypesize = sizeof(double);
+    else if (sendtype == ncclFloat) sendtypesize = sizeof(float);
+    else if (sendtype == ncclInt) sendtypesize = sizeof(int);
+    else if (sendtype == ncclInt64) sendtypesize = sizeof(int64_t);
+    else return ACG_ERR_NOT_SUPPORTED;
+    
+    if (recvtype == ncclDouble) recvtypesize = sizeof(double);
+    else if (recvtype == ncclFloat) recvtypesize = sizeof(float);
+    else if (recvtype == ncclInt) recvtypesize = sizeof(int);
+    else if (recvtype == ncclInt64) recvtypesize = sizeof(int64_t);
+    else return ACG_ERR_NOT_SUPPORTED;
+
+    /* Use NCCL-compatible API provided by MSCCLPP */
+    int err = ncclGroupStart();
+    if (err) { if (mscclpperrcode) *mscclpperrcode = err; return ACG_ERR_MSCCLPP; }
+    
+    /* Post receives */
+    for (int p = 0; p < nsenders; p++) {
+#if defined(ACG_DEBUG_HALO)
+        fprintf(stderr, "%s: posting MSCCLPP Recv of size %d from sender %d\n", 
+                __func__, recvcounts[p], senders[p]);
+#endif
+        void * recvbufp = (char *) recvbuf + recvtypesize*rdispls[p];
+        err = ncclRecv(recvbufp, recvcounts[p], recvtype, senders[p], comm, stream);
+        if (err) { if (mscclpperrcode) *mscclpperrcode = err; return ACG_ERR_MSCCLPP; }
+        if (nrecvbytes) *nrecvbytes += recvcounts[p]*recvtypesize;
+    }
+    if (nrecvmsgs) *nrecvmsgs += nsenders;
+
+    /* Post sends */
+    for (int p = 0; p < nrecipients; p++) {
+#if defined(ACG_DEBUG_HALO)
+        fprintf(stderr, "%s: posting MSCCLPP Send of size %d for recipient %d\n", 
+                __func__, sendcounts[p], recipients[p]);
+#endif
+        void * sendbufp = (char *) sendbuf + sendtypesize*sdispls[p];
+        err = ncclSend(sendbufp, sendcounts[p], sendtype, recipients[p], comm, stream);
+        if (err) { if (mscclpperrcode) *mscclpperrcode = err; return ACG_ERR_MSCCLPP; }
+        if (nsendbytes) *nsendbytes += sendcounts[p]*sendtypesize;
+    }
+    if (nsendmsgs) *nsendmsgs += nrecipients;
+    
+    err = ncclGroupEnd();
+    if (err) { if (mscclpperrcode) *mscclpperrcode = err; return ACG_ERR_MSCCLPP; }
+    return ACG_SUCCESS;
+}
+#endif
+
 #if defined(ACG_HAVE_CUDA)
 /**
  * ‘acghalo_exchange_cuda()’ performs a halo exchange for data
@@ -1412,7 +1491,25 @@ int acghalo_exchange_cuda(
 #else
         return ACG_ERR_NCCL_NOT_SUPPORTED;
 #endif
-    } else if (comm->type == acgcomm_nvshmem) {
+    } else if (comm->type == acgcomm_mscclpp) {
+#if defined(ACG_HAVE_MSCCLPP)
+        err = halo_alltoallv_mscclpp(
+            d_sendbuf, halo->nrecipients, halo->recipients,
+            halo->sendcounts, halo->sdispls,
+            acgdatatype_nccl(sendtype),
+            d_recvbuf, halo->nsenders, halo->senders,
+            halo->recvcounts, halo->rdispls,
+            acgdatatype_nccl(recvtype),
+            comm->ncclcomm, stream, mpierrcode,
+            !warmup ? &halo->nmpisend : NULL,
+            !warmup ? &halo->Bmpisend : NULL,
+            !warmup ? &halo->nmpiirecv : NULL,
+            !warmup ? &halo->Bmpiirecv : NULL);
+        if (err) return err;
+#else
+        return ACG_ERR_MSCCLPP_NOT_SUPPORTED;
+#endif   
+} else if (comm->type == acgcomm_nvshmem) {
 #if defined(ACG_HAVE_NVSHMEM)
         err = halo_alltoallv_nvshmem(
             halo->sendsize, d_sendbuf, halo->nrecipients, halo->recipients,
@@ -1520,7 +1617,25 @@ int acghalo_exchange_cuda_begin(
 #else
         return ACG_ERR_NCCL_NOT_SUPPORTED;
 #endif
-    } else if (comm->type == acgcomm_nvshmem) {
+    } else if (comm->type == acgcomm_mscclpp) {
+#if defined(ACG_HAVE_MSCCLPP)
+        err = halo_alltoallv_mscclpp(
+            d_sendbuf, halo->nrecipients, halo->recipients,
+            halo->sendcounts, halo->sdispls,
+            acgdatatype_nccl(sendtype),
+            d_recvbuf, halo->nsenders, halo->senders,
+            halo->recvcounts, halo->rdispls,
+            acgdatatype_nccl(recvtype),
+            comm->ncclcomm, stream, mpierrcode,
+            !warmup ? &halo->nmpisend : NULL,
+            !warmup ? &halo->Bmpisend : NULL,
+            !warmup ? &halo->nmpiirecv : NULL,
+            !warmup ? &halo->Bmpiirecv : NULL);
+        if (err) return err;
+#else
+        return ACG_ERR_MSCCLPP_NOT_SUPPORTED;
+#endif   
+} else if (comm->type == acgcomm_nvshmem) {
 #if defined(ACG_HAVE_NVSHMEM)
         err = halo_alltoallv_nvshmem(
             halo->sendsize, d_sendbuf, halo->nrecipients, halo->recipients,
@@ -1599,6 +1714,12 @@ int acghalo_exchange_cuda_end(
         /* do nothing */
 #else
         return ACG_ERR_NCCL_NOT_SUPPORTED;
+#endif
+    } else if (comm->type == acgcomm_mscclpp) {
+#if defined(ACG_HAVE_MSCCLPP)
+        /* do nothing */
+#else
+        return ACG_ERR_MSCCLPP_NOT_SUPPORTED;
 #endif
     } else if (comm->type == acgcomm_nvshmem) {
 #if defined(ACG_HAVE_NVSHMEM)
