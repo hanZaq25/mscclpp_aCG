@@ -65,6 +65,8 @@ set(PROJECT_SOURCES
 	../acg/mtxfile.h
 	../acg/nvshmem.cu
 	../acg/nvshmem.h
+  ../acg/mscclpp_c_wrapper.cu
+  ../acg/mscclpp_c_wrapper.h 
 	../acg/prefixsum.c
 	../acg/prefixsum.h
 	../acg/sort.c
@@ -130,6 +132,11 @@ find_package(NCCL)
 if (NCCL_FOUND)
     add_definitions(-DACG_HAVE_NCCL)
 endif ()
+
+find_package(MSCCLPP)
+if (MSCCLPP_FOUND)
+    add_definitions(-DACG_HAVE_MSCCLPP)
+endif() 
 
 find_package(NVSHMEM)
 if (NVSHMEM_FOUND)
@@ -199,6 +206,10 @@ if (NCCL_FOUND)
   target_include_directories(${PROJECT_NAME} PRIVATE ${NCCL_INCLUDE_DIR})
   target_link_libraries(${PROJECT_NAME} ${NCCL_LIBRARY})
 endif ()
+if (MSCCLPP_FOUND)
+  target_include_directories(${PROJECT_NAME} PRIVATE ${MSCCLPP_INCLUDE_DIR})
+  target_link_libraries(${PROJECT_NAME} ${MSCCLPP_LIBRARY})
+endif() 
 if (NVSHMEM_FOUND)
   target_include_directories(${PROJECT_NAME} PRIVATE ${NVSHMEM_INCLUDE_DIRS})
   target_link_libraries(${PROJECT_NAME} ${NVSHMEM_LIBRARIES})
