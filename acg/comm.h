@@ -40,7 +40,9 @@
 #ifdef ACG_HAVE_CUDA
 #include <cuda_runtime_api.h>
 #endif
-#ifdef ACG_HAVE_NCCL
+#ifdef ACG_HAVE_MSCCLPP
+#include "mscclpp_c_wrapper.h"
+#elif defined(ACG_HAVE_NCCL)
 #include <nccl.h>
 #endif
 #ifdef ACG_HAVE_HIP
@@ -86,6 +88,7 @@ enum acgcommtype
     acgcomm_null,     /* null communicator */
     acgcomm_mpi,      /* MPI communicator */
     acgcomm_nccl,     /* NCCL communicator */
+    acgcomm_mscclpp,  /* MSCCL++ communicator */
     acgcomm_rccl,     /* RCCL communicator */
     acgcomm_nvshmem,  /* NVSHMEM communicator */
     acgcomm_rocshmem,  /* rocSHMEM communicator */
@@ -111,7 +114,7 @@ struct acgcomm
     MPI_Comm mpicomm;
 #endif
 
-#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL)
+#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL) || defined(ACG_HAVE_MSCCLPP)
     ncclComm_t ncclcomm;
 #endif
 };
@@ -136,6 +139,16 @@ ACG_API int acgcomm_init_nccl(
     struct acgcomm * comm,
     ncclComm_t ncclcomm,
     int * ncclerrcode);
+#endif
+
+#if defined(ACG_HAVE_MSCCLPP)
+/**
+ * ‘acgcomm_init_mscclpp()’ creates a communicator using MSCCLPP's NCCL wrapper.
+ */
+ACG_API int acgcomm_init_mscclpp(
+    struct acgcomm * comm,
+    ncclComm_t ncclcomm,
+    int * mscclpperrcode);
 #endif
 
 #if defined(ACG_HAVE_RCCL)
@@ -200,7 +213,7 @@ ACG_API int acgdatatype_size(enum acgdatatype datatype, int * size);
 ACG_API MPI_Datatype acgdatatype_mpi(enum acgdatatype datatype);
 #endif
 
-#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL)
+#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL) || defined(ACG_HAVE_MSCCLPP)
 /**
  * ‘acgdatatype_nccl()’ returns a corresponding NCCL_Datatype for the
  * given data type.
@@ -233,7 +246,7 @@ ACG_API const char * acgopstr(enum acgop op);
 ACG_API MPI_Op acgop_mpi(enum acgop op);
 #endif
 
-#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL)
+#if defined(ACG_HAVE_NCCL) || defined(ACG_HAVE_RCCL) || defined(ACG_HAVE_MSCCLPP)
 /**
  * ‘acgop_nccl()’ returns a corresponding ncclRedOp_t.
  */

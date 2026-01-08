@@ -37,7 +37,9 @@
 #ifdef ACG_HAVE_MPI
 #include <mpi.h>
 #endif
-#ifdef ACG_HAVE_NCCL
+#ifdef ACG_HAVE_MSCCLPP
+#include "mscclpp_c_wrapper.h"
+#elif defined(ACG_HAVE_NCCL)
 #include <nccl.h>
 #endif
 #ifdef ACG_HAVE_RCCL
@@ -65,6 +67,7 @@ const char * acgcommtypestr(enum acgcommtype commtype)
     else if (commtype == acgcomm_mpi) { return "mpi"; }
     else if (commtype == acgcomm_nccl) { return "nccl"; }
     else if (commtype == acgcomm_nvshmem) { return "nvshmem"; }
+    else if (commtype == acgcomm_mscclpp) { return "mscclpp"; }
     else { return "unknown"; }
 }
 
@@ -109,6 +112,18 @@ int acgcomm_init_nccl(
 }
 #endif
 
+#if defined(ACG_HAVE_MSCCLPP)
+int acgcomm_init_mscclpp(
+    struct acgcomm * comm,
+    ncclComm_t ncclcomm,
+    int * mscclpperrcode)
+{
+    comm->ncclcomm = ncclcomm;
+    comm->type = acgcomm_mscclpp;
+    return ACG_SUCCESS;
+}
+#endif
+
 #if defined(ACG_HAVE_RCCL)
 /**
  * ‘acgcomm_init_rccl()’ creates a communicator from a given RCCL
@@ -139,6 +154,9 @@ void acgcomm_free(
 #if defined(ACG_HAVE_NCCL)
     /* if (comm->type == acgcomm_nccl) ncclCommDestroy(comm->ncclcomm); */
 #endif
+#if defined(ACG_HAVE_MSCCLPP)
+    /* if (comm->type == acgcomm_mscclpp) ncclCommDestroy(comm->ncclcomm); */
+#endif
 #if defined(ACG_HAVE_RCCL)
     /* if (comm->type == acgcomm_rccl) ncclCommDestroy(comm->ncclcomm); */
 #endif
@@ -165,6 +183,13 @@ int acgcomm_size(
 #if defined(ACG_HAVE_NCCL)
     else if (comm->type == acgcomm_nccl) {
         int err = ncclCommCount(comm->ncclcomm, commsize);
+        if (err != ncclSuccess) return ACG_ERR_NCCL;
+        return ACG_SUCCESS;
+    }
+#endif
+#if defined(ACG_HAVE_MSCCLPP)
+    else if (comm->type == acgcomm_mscclpp) {
+        ncclResult_t err = ncclCommCount(comm->ncclcomm, commsize);
         if (err != ncclSuccess) return ACG_ERR_NCCL;
         return ACG_SUCCESS;
     }
@@ -202,6 +227,13 @@ int acgcomm_rank(
 #if defined(ACG_HAVE_NCCL)
     else if (comm->type == acgcomm_nccl) {
         int err = ncclCommUserRank(comm->ncclcomm, rank);
+        if (err != ncclSuccess) return ACG_ERR_NCCL;
+        return ACG_SUCCESS;
+    }
+#endif
+#if defined(ACG_HAVE_MSCCLPP)
+    else if (comm->type == acgcomm_mscclpp) {
+        ncclResult_t err = ncclCommUserRank(comm->ncclcomm, rank);
         if (err != ncclSuccess) return ACG_ERR_NCCL;
         return ACG_SUCCESS;
     }
@@ -333,6 +365,11 @@ int acgcomm_barrier(
 #else
         return ACG_ERR_NCCL_NOT_SUPPORTED;
 #endif
+    } else if (comm->type == acgcomm_mscclpp) {
+#if defined(ACG_HAVE_MSCCLPP)
+        ncclResult_t err = ncclAllReduce(NULL, NULL, 0, ncclInt, ncclSum, comm->ncclcomm, stream);
+        if (err != ncclSuccess) { if (errcode) *errcode = err; return ACG_ERR_NCCL; }
+#endif
     } else if (comm->type == acgcomm_nvshmem) {
 #if defined(ACG_HAVE_NVSHMEM)
         acg_nvshmemx_barrier_all_on_stream(stream);
@@ -377,6 +414,14 @@ int acgcomm_allreduce(
         if (err != ncclSuccess) { if (errcode) *errcode = err; return ACG_ERR_NCCL; }
 #else
         return ACG_ERR_NCCL_NOT_SUPPORTED;
+#endif
+    } else if (comm->type == acgcomm_mscclpp) {
+#if defined(ACG_HAVE_MSCCLPP)
+        ncclResult_t err = ncclAllReduce(
+        src == ACG_IN_PLACE ? dst : src, dst,
+            count, acgdatatype_nccl(datatype), acgop_nccl(op),
+            comm->ncclcomm, stream);
+        if (err != ncclSuccess) { if (errcode) *errcode = err; return ACG_ERR_NCCL; }
 #endif
     } else if (comm->type == acgcomm_nvshmem) {
 #if defined(ACG_HAVE_NVSHMEM)
